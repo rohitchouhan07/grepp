@@ -1,17 +1,14 @@
 use std::error::Error;
 use std::{fs, thread};
-use std::sync::mpsc;
 
 pub struct CliArgs {
     pub file_path: String,
     pub pattern: String,
 }
 
-fn search<'a>(pattern: &str,
-              contents: &'a Vec<&str>) -> Vec<&'a &'a str> {
-    
-    let mut matches = Vec::<&&str>::new();
-    
+fn search<'a>(pattern: &str, contents: Vec<&'a str>) -> Vec<&'a str> {
+    let mut matches = Vec::<&str>::new();
+
     for line in contents {
         if line.contains(pattern) {
             matches.push(line);
@@ -22,45 +19,39 @@ fn search<'a>(pattern: &str,
 }
 
 pub fn run(cli_args: CliArgs) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(cli_args.file_path)?;
-    let num_threads = thread::available_parallelism()?.get();
-    let lines = contents.lines().collect::<Vec<&str>>();
-    let vec_len = lines.len();
-
-    let (tx, rx) = mpsc::channel();
-    let tx1 = tx.clone();
-
-    thread::spawn(move || {
-        let mut matches = Vec::<&str>::new();
-        for line in lines {
-            if line.contains((&cli_args.pattern)) {
-                matches.push(line);
-            } 
-        }
-        tx.send(matches).unwrap();
-    });
- 
-    thread::spawn(move || {
-        let mut matches = Vec::<&str>::new();
-        for line in lines {
-            if line.contains((&cli_args.pattern)) {
-                matches.push(line);
-            } 
-        }
-        tx1.send(matches).unwrap();
-    });
-
-    //let matches = search(&cli_args.pattern, &lines);
-
-    //for line in matches {
-    //    println!("{line}");
-    //}
     
-    for received in rx {
-        for line in received {
-            println!("{line}");
-        }
-    }
+    let contents = fs::read_to_string(&cli_args.file_path)?;
+    let lines: Vec<&str> = contents.lines().collect();
+    let c2 = contents.clone();
+    let pattern = cli_args.pattern.clone();
 
+    let mid = lines.len() / 2;
+    
+    let handle1 = thread::spawn(move || {
+        let cloned_contents = contents.clone();
+        // Clone the contents into the thread
+        let cloned_lines: Vec<&str> = cloned_contents.lines().collect();
+        let lines1 = cloned_lines[..mid].to_vec();
+        let matches = search(&cli_args.pattern, lines1);
+        for line in matches {
+            println!("{}", line);
+        }
+    });
+
+    let handle2 = thread::spawn(move || {
+        let cloned_contents = c2.clone();
+        // Clone the contents into the thread
+        let cloned_lines: Vec<&str> = cloned_contents.lines().collect();
+        let lines2 = cloned_lines[mid..].to_vec();
+        let matches = search(&pattern, lines2);
+        for line in matches {
+            println!("{}", line);
+        }
+    });
+
+
+    handle1.join().unwrap();
+    handle2.join().unwrap();
+    
     Ok(())
 }
